@@ -137,13 +137,11 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+    "Journal Entry": {
+        "on_submit": "hrms_custom.events.journal_hooks.process_salary_payment"
+    }
+}
 
 # Scheduled Tasks
 # ---------------
@@ -242,3 +240,11 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+fixtures = [
+    {
+        "doctype": "Custom Field",
+        "filters": [
+            ["name", "in", ["Salary Slip-custom_journal_amount","Salary Slip-payment_status"]]
+        ]
+    },
+    ]
