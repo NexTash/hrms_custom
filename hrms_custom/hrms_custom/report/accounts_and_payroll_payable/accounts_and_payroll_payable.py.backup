@@ -1,0 +1,139 @@
+# Copyright (c) 2025, Gaston Vedani and Contributors
+# License: GNU General Public License v3. See license.txt
+
+import frappe
+from frappe import qb
+from frappe.query_builder import Criterion
+from frappe.utils import cint, flt, getdate
+from erpnext.accounts.report.accounts_receivable.accounts_receivable import ReceivablePayableReport
+
+
+def execute(filters=None):
+	args = {
+		"account_type": "Payable",
+		"naming_by": ["Buying Settings", "supp_master_name"],
+	}
+	return AccountsAndPayrollPayableReport(filters).run(args)
+
+
+class AccountsAndPayrollPayableReport(ReceivablePayableReport):
+	def __init__(self, filters=None):
+		super().__init__(filters)
+		self.include_payroll_payable = cint(filters.get("include_payroll_payable"))
+
+	def get_data(self):
+		# Get the original data from parent class
+		data = super().get_data()
+		
+		# Ensure data is a list
+		if data is None:
+			data = []
+		
+		# If payroll payable is included, add payroll entries
+		if self.include_payroll_payable:
+			payroll_data = self.get_payroll_entries()
+			if payroll_data:
+				data.extend(payroll_data)
+		
+		return data
+
+	def get_payroll_entries(self):
+		"""Get GL Entry ledgers for Payroll Entries using against_voucher_type"""
+		gle = qb.DocType("GL Entry")
+		pe = qb.DocType("Payroll Entry")
+		emp = qb.DocType("Employee")
+		
+		conditions = [
+			gle.against_voucher_type == "Payroll Entry",
+			gle.posting_date <= self.filters.report_date,
+			gle.is_cancelled == 0
+		]
+
+		if self.filters.get("company"):
+			conditions.append(gle.company == self.filters.company)
+
+		# Query GL entries for payroll entries
+		query = (
+			qb.from_(gle)
+			.left_join(pe).on(pe.name == gle.against_voucher)
+			.left_join(emp).on(emp.name == pe.employee)
+			.select(
+				gle.voucher_no,
+				pe.employee.as_("party"),
+				frappe.literal("Employee").as_("party_type"),
+				emp.employee_name.as_("party_name"),
+				gle.posting_date,
+				gle.posting_date.as_("due_date"),  # Use posting date as due date for payroll
+				gle.account,
+				gle.debit,
+				gle.credit,
+				gle.company,
+				gle.voucher_type,
+				gle.against_voucher_type.as_("reference_type"),
+				gle.against_voucher.as_("reference_name")
+			)
+			.where(Criterion.all(conditions))
+			.orderby(pe.employee, gle.posting_date)
+		)
+
+		gl_entries = query.run(as_dict=True)
+		
+		if not gl_entries:
+			return []
+
+		# Group by party and against_voucher to calculate net amounts
+		payroll_summary = {}
+		
+		for entry in gl_entries:
+			# Skip entries without a party (employee)
+			if not entry.party:
+				continue
+				
+			key = f"{entry.party}::{entry.reference_name}"
+			
+			if key not in payroll_summary:
+				payroll_summary[key] = {
+					"voucher_type": "Journal Entry",
+					"voucher_no": entry.voucher_no,
+					"party_type": "Employee",
+					"party": entry.party,
+					"party_name": entry.party_name or entry.party,
+					"posting_date": entry.posting_date,
+					"due_date": entry.due_date,
+					"company": entry.company,
+					"account": entry.account,
+					"invoiced_amount": 0,
+					"paid_amount": 0,
+					"credit_note_amount": 0,
+					"outstanding_amount": 0,
+					"currency": frappe.get_cached_value("Company", entry.company, "default_currency"),
+					"age": 0,
+					"reference_type": entry.reference_type,
+					"reference_name": entry.reference_name
+				}
+			
+			# Credits go to Invoiced Amount (what we owe to employees)
+			if entry.credit > 0:
+				payroll_summary[key]["invoiced_amount"] += entry.credit
+			
+			# Debits go to Paid Amount (what we paid to employees)
+			if entry.debit > 0:
+				payroll_summary[key]["paid_amount"] += entry.debit
+
+		# Calculate outstanding amounts and filter out zero balances
+		result = []
+		for key, summary in payroll_summary.items():
+			outstanding = summary["invoiced_amount"] - summary["paid_amount"]
+			
+			# Only include entries with non-zero outstanding amounts
+			if abs(outstanding) > 0.01:  # Small tolerance for rounding
+				summary["outstanding_amount"] = outstanding
+				
+				# Calculate age
+				if summary["due_date"]:
+					age = (getdate(self.filters.report_date) - getdate(summary["due_date"])).days
+					summary["age"] = max(age, 0)
+				
+				result.append(summary)
+		
+		return result
