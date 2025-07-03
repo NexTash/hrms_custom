@@ -139,7 +139,8 @@ doctype_js = {"Salary Slip" : "public/js/salary_slip_custom.js"}
 
 doc_events = {
     "Journal Entry": {
-        "on_submit": "hrms_custom.events.journal_hooks.process_salary_payment"
+        "on_submit": "hrms_custom.events.journal_hooks.process_salary_payment",
+        "on_cancel": "hrms_custom.events.journal_hooks.reverse_salary_payment"
     }
     # Temporarily disabled automatic recalculation to avoid conflicts
     # "Salary Slip": {
