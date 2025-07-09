@@ -131,9 +131,13 @@ website_route_rules = [
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+# DocType Class
+# ---------------
+# Override standard doctype classes
+
+override_doctype_class = {
+	"Salary Slip": "hrms_custom.overrides.salary_slip.SalarySlipCustom"
+}
 
 # Document Events
 # ---------------
@@ -143,6 +147,10 @@ doc_events = {
     "Journal Entry": {
         "on_submit": "hrms_custom.events.journal_hooks.process_salary_payment",
         "on_cancel": "hrms_custom.events.journal_hooks.reverse_salary_payment"
+    },
+    "Salary Slip": {
+        "after_insert": "hrms_custom.events.salary_slip_auto_recalc.auto_recalculate_dependent_components_after_insert",
+        "before_save": "hrms_custom.events.salary_slip_auto_recalc.auto_recalculate_dependent_components_before_save"
     }
     # Temporarily disabled automatic recalculation to avoid conflicts
     # "Salary Slip": {
