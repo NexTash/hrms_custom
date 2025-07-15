@@ -255,19 +255,19 @@ doc_events = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
-fixtures = [
-    {
-        "doctype": "Custom Field",
-        "filters": [
-            ["name", "in", ["Salary Slip-custom_journal_amount","Salary Slip-payment_status"]]
-        ]
-    },
-    {
-        "doctype": "Property Setter",
-        "filters": [
-            ["doc_type", "=", "Account"],
-            ["field_name", "=", "account_type"],
-            ["property", "=", "options"]
-        ]
-    }
-]
+# fixtures = [
+#     {
+#         "doctype": "Custom Field",
+#         "filters": [
+#             ["name", "in", ["Salary Slip-custom_journal_amount","Salary Slip-payment_status"]]
+#         ]
+#     },
+#     {
+#         "doctype": "Property Setter",
+#         "filters": [
+#             ["doc_type", "=", "Account"],
+#             ["field_name", "=", "account_type"],
+#             ["property", "=", "options"]
+#         ]
+#     }
+# ]
